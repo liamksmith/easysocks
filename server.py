@@ -1,8 +1,4 @@
-from socketserver import ThreadingMixIn, TCPServer, StreamRequestHandler
-
-
-class ThreadedTcpServer(ThreadingMixIn, TCPServer):
-    pass
+from socketserver import ThreadingMixIn, TCPServer, StreamRequestHandler, ThreadingTCPServer
 
 class TCPHandler(StreamRequestHandler):
     def handle(self):
@@ -19,10 +15,10 @@ class TCPHandler(StreamRequestHandler):
 
 def main():
     PORT: int = 8080
-    server = ThreadedTcpServer(('localhost', PORT), TCPHandler)
-    server.allow_reuse_address = True
-    print("Starting server at port {}, use <Ctrl-C> to stop", PORT)
-    server.serve_forever()
+    with ThreadingTCPServer(('localhost', PORT), TCPHandler) as server:
+        server.allow_reuse_address = True
+        print("Starting server at port {}, use <Ctrl-C> to stop", PORT)
+        server.serve_forever()
 
 if __name__ == '__main__':
     main()
