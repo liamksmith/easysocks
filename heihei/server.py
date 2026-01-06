@@ -5,23 +5,13 @@ import struct
 
 from loguru import logger
 
-
 async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    print("a client has connected")
+    # print("a client has connected")
     try:
-        ## $1
-        data = await reader.read(262)
+        data = await reader.read(1)
         if len(data) < 1:
             raise Exception("no data")
-        writer.write(b"\x05\x00")   # 0x00: no authentiacion required always
-        await writer.drain()
-        ## skip auth ## $2
-        data = await reader.read(4)
-        mode = data[1]
-        if mode != 1:   # CONNECT X'01' / BIND X'02' / UDP ASSOCIATE X'03'
-            logger.error('mode != 1')
-            return
-        addr_type = data[3]
+        addr_type = data[0]
         if addr_type == 1:  # IP V4 address: X'01'
             addr_ip = await reader.read(4)
             addr = socket.inet_ntoa(addr_ip)
@@ -41,7 +31,8 @@ async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamW
         remote_reader, remote_writer = await asyncio.open_connection(addr, port[0])
         logger.info("connected:{}, {}".format(addr, port[0]))
 
-        reply: bytes = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        # tell the forward server that we are prepared to send/recv data.
+        reply: bytes = b"\x00"
         writer.write(reply)
         await writer.drain()
 
@@ -51,11 +42,11 @@ async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamW
     except socket.error as r:
         logger.error(r)
     except Exception as e:
-        logger.info(e)
+        logger.error(e)
     finally:
-        writer.close()
+        writer.close()  # OSError: [WinError 64] 指定的网络名不再可用。
         await writer.wait_closed()
-        print("a client has disconnected")
+        # print("a client has disconnected")
 
 async def handle_tcp_out(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                          remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
@@ -97,7 +88,7 @@ async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.Stream
         try:
             data = await remote_reader.read(4096)
             if len(data) == 0:
-                print("handle_tcp_income: 连接正常关闭")
+                # print("handle_tcp_income: 连接正常关闭")
                 break
             # print("cc handle_tcp_income read:", len(data))
             writer.write(data)
@@ -111,9 +102,8 @@ async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.Stream
     await writer.wait_closed()
     await remote_writer.wait_closed()
 
-
 async def start_server():
-    server = await asyncio.start_server(client_connected, port=10080)
+    server = await asyncio.start_server(client_connected, port=2333)
     # print(type(server))
     addr = server.sockets[0].getsockname()
     logger.info(f"服务器启动在 {addr[0]}:{addr[1]}")
