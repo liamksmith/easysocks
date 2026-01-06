@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: heihei
+Version: 0.1
+Summary: 你好呀示例包
+Home-page: test.test123.top
+Author: 小黑子
+Author-email: 123@qq.com
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: summary

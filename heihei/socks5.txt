@@ -1,0 +1,79 @@
+#
+# 版本标识符/方法选择消息（version identifier/method selection message）
+# 对于此版本的协议，VER字段被固定设置为 X'05'。 NMETHODS字段表示在METHODS字段中的方法标识符（以字节为单位）的数量。
+# 当前METHOD定义的值是：
+# X'00' 无需认证（NO AUTHENTICATION REQUIRED）
+# X'01' GSSAPI
+# X'02' 用户名/密码（USERNAME/PASSWORD）
+# X'03' 至 X'7F' IANA 分配（IANA ASSIGNED）
+# X'80' 到 X'FE' 保留用于私人方法（RESERVED FOR PRIVATE METHODS）
+# X'FF' 没有可接受的方法（NO ACCEPTABLE METHODS）
+# +----+----------+----------+
+# |VER | NMETHODS | METHODS  |
+# +----+----------+----------+
+# | 1  | 1        | 1 to 255 |
+# +----+----------+----------+
+#
+# 检查用户名密码（未来还要检查白名单等）。
+# +-------+--------------+--------+--------------+--------+
+# |Version|UserNameLength|UserName|PasswordLength|Password|
+# +-------+--------------+--------+--------------+--------+
+# |1      |      1       |  1~255 |      1       |  1~255 |
+# +-------+--------------+--------+--------------+--------+
+# Note: Version鉴权版本号,与协议版本号无关。(It is always 1 currently.)
+# Server reply:
+# +-------+------+
+# |Version|Status|
+# +-------+------+
+# |   1   |   1  |
+# +-------+------+
+# Version: same to request.(It is always 1 currently.)
+# Status: 0 for OK, other value indicate a failure code.
+# auth skipped as no authentiacion required
+
+## $2
+# Socks5 REQUEST.
+# +----+-----+-------+------+----------+----------+
+# |VER | CMD | RSV   | ATYP | DST.ADDR | DST.PORT |
+# +----+-----+-------+------+----------+----------+
+# | 1  | 1   | X'00' | 1    | Variable | 2        |
+# +----+-----+-------+------+----------+----------+
+# 其中：
+# VER 协议版本号: X'05'
+# CMD
+#     CONNECT X'01'
+#     BIND X'02'
+#     UDP ASSOCIATE X'03'
+#     RSV 保留未用（RESERVED）
+# ATYP 后续地址（即DST.ADDR）的地址类型（address type of following address）
+#     IP V4 address: X'01'
+#     DOMAINNAME: X'03'
+#     P V6 address: X'04'
+# DST.ADDR 期望的目标地址
+# DST.PORT 期望的目标端口，网络字节序
+# SOCKS服务器通常会根据源地址和目标地址评估请求，并根据请求类型返回一条或多条回复消息。
+# Reply:
+# +----+-----+-------+------+----------+----------+
+# |VER | REP | RSV   | ATYP | BND.ADDR | BND.PORT |
+# +----+-----+-------+------+----------+----------+
+# | 1  | 1   | X'00' | 1    | Variable | 2        |
+# +----+-----+-------+------+----------+----------+
+# VER 协议版本：X'05'
+# REP 回复字段：
+#     X'00' 成功
+#     X'01' 普通SOCKS服务器故障
+#     X'02' 连接不被规则集允许
+#     X'03' 网络不可达
+#     X'04' 主机不可达
+#     X'05' 连接被拒绝
+#     X'06' TTL 过期
+#     X'07' 不支持的命令
+#     X'08' 不支持的地址类型
+#     X'09' 到 X'FF' 未分配
+# RSV 保留未用，总是为0
+# ATYP 后续地址(即BND.ADDR)的地址类型
+#     IP V4 地址：X'01'
+#     域名：X'03'
+#     IP V6 地址：X'04'
+# BND.ADDR 服务器绑定的地址
+# BND.PORT 服务器绑定的端口（网络字节序）
