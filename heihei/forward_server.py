@@ -1,10 +1,15 @@
 # 这是一个示例 Python 脚本。
 import asyncio
 import socket
+import ssl
 import struct
 from optparse import OptionParser
+from pathlib import Path
 
 from loguru import logger
+
+CERT_DIR = Path(__file__).parent.parent / "certs"
+CERT_FILE = CERT_DIR / "server.crt"
 
 class ForwardService:
     def __init__(self, proxy_host, proxy_port):
@@ -49,8 +54,14 @@ class ForwardService:
             port = await reader.read(2)
             buf_about_remote += port
 
+            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ssl_ctx.load_verify_locations(cafile=CERT_FILE)
+            ssl_ctx.check_hostname = False
+
             logger.info('connecting proxy server %s:%d' % (self.proxy_host, self.proxy_port))
-            remote_reader, remote_writer = await asyncio.open_connection(self.proxy_host, self.proxy_port)
+            remote_reader, remote_writer = await asyncio.open_connection(
+                self.proxy_host, self.proxy_port, ssl=ssl_ctx
+            )
             logger.info("connected:{}, {}".format(self.proxy_host, self.proxy_port))
             # tell proxy the target server:port
             remote_writer.write(buf_about_remote)

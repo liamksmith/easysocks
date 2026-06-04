@@ -1,9 +1,15 @@
 # 这是一个示例 Python 脚本。
 import asyncio
 import socket
+import ssl
 import struct
+from pathlib import Path
 
 from loguru import logger
+
+CERT_DIR = Path(__file__).parent.parent / "certs"
+CERT_FILE = CERT_DIR / "server.crt"
+KEY_FILE = CERT_DIR / "server.key"
 
 async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     # print("a client has connected")
@@ -103,7 +109,9 @@ async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.Stream
     await remote_writer.wait_closed()
 
 async def start_server():
-    server = await asyncio.start_server(client_connected, port=2333)
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_ctx.load_cert_chain(certfile=CERT_FILE, keyfile=KEY_FILE)
+    server = await asyncio.start_server(client_connected, port=2333, ssl=ssl_ctx)
     # print(type(server))
     addr = server.sockets[0].getsockname()
     logger.info(f"服务器启动在 {addr[0]}:{addr[1]}")
