@@ -42,9 +42,9 @@ async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamW
         writer.write(reply)
         await writer.drain()
 
-        task1 = asyncio.create_task(handle_tcp_out(reader, writer, remote_reader, remote_writer))
-        task2 = asyncio.create_task(handle_tcp_income(reader, writer, remote_reader, remote_writer))
-        await asyncio.gather(task1, task2)
+        task_to_target = asyncio.create_task(_relay_to_target(reader, writer, remote_reader, remote_writer))
+        task_from_target = asyncio.create_task(_relay_from_target(reader, writer, remote_reader, remote_writer))
+        await asyncio.gather(task_to_target, task_from_target)
     except socket.error as r:
         logger.error(r)
     except Exception as e:
@@ -54,19 +54,19 @@ async def client_connected(reader: asyncio.StreamReader, writer: asyncio.StreamW
         await writer.wait_closed()
         # print("a client has disconnected")
 
-async def handle_tcp_out(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                         remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
+async def _relay_to_target(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                           remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
     # is_quit = False
     # while not is_quit:
     #     await asyncio.sleep(1)
     #     print("handle_tcp_out")
-    is_quit = False
-    while not is_quit:
+    done = False
+    while not done:
         try:
             data = await reader.read(4096)
             # print(type(data))
             if len(data) == 0:
-                print("handle_tcp_out: 连接正常关闭")
+                print("_relay_to_target: 连接正常关闭")
                 break
             # print("handle_tcp_out cc read:", len(data))
             remote_writer.write(data)
@@ -74,23 +74,23 @@ async def handle_tcp_out(reader: asyncio.StreamReader, writer: asyncio.StreamWri
             # print("handle_tcp_out cc write:", len(data))
         except socket.error as e:
             logger.error(e)
-            is_quit = True
+            done = True
         except Exception as e:
             logger.error(e)
-            is_quit = True
+            done = True
     writer.close()
     remote_writer.close()
     await writer.wait_closed()
     await remote_writer.wait_closed()
 
-async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                            remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
+async def _relay_from_target(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                             remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
     # is_quit = False
     # while not is_quit:
     #     await asyncio.sleep(1)
     #     print("handle_tcp_income")
-    is_quit = False
-    while not is_quit:
+    done = False
+    while not done:
         try:
             data = await remote_reader.read(4096)
             if len(data) == 0:
@@ -102,7 +102,7 @@ async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.Stream
             # print("cc handle_tcp_income write:", len(data))
         except socket.error as e:
             logger.error(e)
-            is_quit = True
+            done = True
     writer.close()
     remote_writer.close()
     await writer.wait_closed()

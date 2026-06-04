@@ -11,7 +11,7 @@ from loguru import logger
 CERT_DIR = Path(__file__).parent.parent / "certs"
 CERT_FILE = CERT_DIR / "server.crt"
 
-class ForwardService:
+class ForwardServer:
     def __init__(self, proxy_host, proxy_port):
         self.proxy_host = proxy_host
         self.proxy_port = proxy_port
@@ -27,32 +27,32 @@ class ForwardService:
             await writer.drain()
             ## $2 skip AUTH, process CONNECT CMD
             data = await reader.read(4)
-            mode = data[1]
-            if mode != 1:  # CONNECT X'01' / BIND X'02' / UDP ASSOCIATE X'03'
-                logger.error('mode != 1')
+            cmd = data[1]
+            if cmd != 1:  # CONNECT X'01' / BIND X'02' / UDP ASSOCIATE X'03'
+                logger.error('cmd != 1')
                 return
             addr_type = data[3]
 
-            buf_about_remote = struct.pack('>B', addr_type)
+            proxy_request = struct.pack('>B', addr_type)
             if addr_type == 1:  # IP V4 address: X'01'
                 addr_ip = await reader.read(4)
                 addr = socket.inet_ntoa(addr_ip)
                 logger.info("CONNECT - target addr is: " + addr)
-                buf_about_remote += addr_ip
+                proxy_request += addr_ip
             elif addr_type == 3:  # DOMAINNAME: X'03'
                 data = await reader.read(1)
                 addr_len = data[0]
                 addr = await reader.read(addr_len)
                 addr = addr.decode()
                 logger.info("CONNECT - target addr is: " + addr)
-                buf_about_remote += struct.pack('>B', addr_len)
-                buf_about_remote += addr.encode()
+                proxy_request += struct.pack('>B', addr_len)
+                proxy_request += addr.encode()
             else:
                 # not support
                 logger.error("addr_type:{} not support".format(addr_type))
                 raise Exception('addr_type not support')
             port = await reader.read(2)
-            buf_about_remote += port
+            proxy_request += port
 
             ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ssl_ctx.load_verify_locations(cafile=CERT_FILE)
@@ -64,7 +64,7 @@ class ForwardService:
             )
             logger.info("connected:{}, {}".format(self.proxy_host, self.proxy_port))
             # tell proxy the target server:port
-            remote_writer.write(buf_about_remote)
+            remote_writer.write(proxy_request)
             await remote_writer.drain()
             result = await remote_reader.read(1)
             if len(result) == 0:
@@ -81,9 +81,9 @@ class ForwardService:
             writer.write(reply)
             await writer.drain()
 
-            task1 = asyncio.create_task(ForwardService.handle_tcp_out(reader, writer, remote_reader, remote_writer))
-            task2 = asyncio.create_task(ForwardService.handle_tcp_income(reader, writer, remote_reader, remote_writer))
-            await asyncio.gather(task1, task2)
+            task_to_proxy = asyncio.create_task(ForwardServer._relay_to_proxy(reader, writer, remote_reader, remote_writer))
+            task_from_proxy = asyncio.create_task(ForwardServer._relay_from_proxy(reader, writer, remote_reader, remote_writer))
+            await asyncio.gather(task_to_proxy, task_from_proxy)
         except socket.error as r:
             logger.error(r)
         # except Exception as e:
@@ -94,14 +94,14 @@ class ForwardService:
             # print("a client has disconnected")
 
     @staticmethod
-    async def handle_tcp_out(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                             remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
+    async def _relay_to_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                              remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
         # is_quit = False
         # while not is_quit:
         #     await asyncio.sleep(1)
         #     print("handle_tcp_out")
-        is_quit = False
-        while not is_quit:
+        done = False
+        while not done:
             try:
                 data = await reader.read(4096)
                 # print(type(data))
@@ -114,24 +114,24 @@ class ForwardService:
                 # print("handle_tcp_out cc write:", len(data))
             except socket.error as e:
                 logger.error(e)
-                is_quit = True
+                done = True
             except Exception as e:
                 logger.error(e)
-                is_quit = True
+                done = True
         writer.close()
         remote_writer.close()
         await writer.wait_closed()
         await remote_writer.wait_closed()
 
     @staticmethod
-    async def handle_tcp_income(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+    async def _relay_from_proxy(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                                 remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter):
         # is_quit = False
         # while not is_quit:
         #     await asyncio.sleep(1)
         #     print("handle_tcp_income")
-        is_quit = False
-        while not is_quit:
+        done = False
+        while not done:
             try:
                 data = await remote_reader.read(4096)
                 if len(data) == 0:
@@ -143,7 +143,7 @@ class ForwardService:
                 # print("cc handle_tcp_income write:", len(data))
             except socket.error as e:
                 logger.error(e)
-                is_quit = True
+                done = True
         writer.close()
         remote_writer.close()
         await writer.wait_closed()
@@ -169,7 +169,7 @@ def main():
                       help="proxy server port")
     opts, _ = parser.parse_args()
     try:
-        f = ForwardService(opts.proxy_host, opts.proxy_port)
+        f = ForwardServer(opts.proxy_host, opts.proxy_port)
         f.run()
     except KeyboardInterrupt:
         logger.info("服务器被用户中断")
